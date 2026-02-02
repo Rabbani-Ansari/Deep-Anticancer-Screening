@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv
+venv/
+ENV/
+env.bak
+env/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Frontend
+node_modules/
+.vite/
+dist/
+
+# Logs
+*.log
+
+# Sensitive/Local Data
+.env
+local_config.py
+data/cancer_drugs.csv
+data/processed/
+
+# Results (Avoid pushing huge models if they can be regenerated, 
+# but for this project, the user might want to keep the trained gnn_model.pth)
+# results/models/
+
+# OS generated files
+.DS_Store
+Thumbs.db
