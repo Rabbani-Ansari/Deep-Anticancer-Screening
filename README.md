@@ -17,11 +17,16 @@ The project includes:
 
 ---
 
-## 🚀 Quick Start (5 Steps)
+## 🚀 Quick Start (6 Steps)
+
+### Step 0: Clone the Repository
+```bash
+git clone https://github.com/Rabbani-Ansari/Deep-Anticancer-Screening.git
+cd Deep-Anticancer-Screening
+```
 
 ### Step 1: Install Dependencies
 ```bash
-cd DrugDiscover
 pip install -r requirements.txt
 ```
 
