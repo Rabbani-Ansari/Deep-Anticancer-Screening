@@ -12,6 +12,9 @@ The project includes:
 - ✅ **Modern Dashboard**: React-based interactive scientific interface.
 - ✅ **IEEE Research Content**: Publication-ready technical documentation.
 
+> [!TIP]
+> **Turnkey Ready**: This project includes the pre-trained GNN model. You can skip the training steps and launch the interface immediately after installing dependencies!
+
 ---
 
 ## 🚀 Quick Start (5 Steps)
@@ -27,13 +30,12 @@ pip install -r requirements.txt
 conda install -c conda-forge rdkit
 ```
 
-### Step 2: Generate Sample Data
-```bash
-python create_sample_data.py
-```
-This creates `data/cancer_drugs.csv` with 1000 synthetic molecules.
+### Step 2: Scientific Data Sources
+The model is pre-trained on verified **Real-World Research Data**:
+- **ChEMBL**: Over 1,000 bioactivity records for anticancer drugs.
+- **NCI-60**: Standard National Cancer Institute screening metrics (GI50).
 
-**For Real Research**: Download NCI-60 data from https://dtp.cancer.gov/
+*Note: You do not need to generate sample data. The `data/cancer_drugs.csv` now contains real scientific structures. If you wish to fetch even more data, you can run `python download_real_data.py`.*
 
 ### Step 3: Run Data Processing
 ```bash
@@ -121,7 +123,7 @@ DrugDiscover/
 | Precision | ~73% | ~82% | +9% |
 | Recall | ~69% | ~79% | +10% |
 
-*Actual results depend on dataset*
+*Actual results depend on cell line and compound class.*
 
 ---
 
