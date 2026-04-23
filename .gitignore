@@ -29,9 +29,8 @@ local_config.py
 data/cancer_drugs.csv
 data/processed/
 
-# Results (Avoid pushing huge models if they can be regenerated, 
-# but for this project, the user might want to keep the trained gnn_model.pth)
-# results/models/
+# Results - Large model binaries (upload manually to deployment)
+results/models/*.pth
 
 # OS generated files
 .DS_Store
