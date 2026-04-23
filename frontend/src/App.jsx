@@ -33,7 +33,7 @@ import {
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import './App.css';
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -45,6 +45,7 @@ function App() {
   // Batch Screening State
   const [batchSmiles, setBatchSmiles] = useState('');
   const [batchResults, setBatchResults] = useState(null);
+  const [batchMeta, setBatchMeta] = useState(null);
   const [scanCount, setScanCount] = useState(0);
   const [scoreFilter, setScoreFilter] = useState(0.5);
   const [selectedMolecule, setSelectedMolecule] = useState(null);
@@ -80,11 +81,18 @@ function App() {
     setLoading(true);
     setError(null);
     setBatchResults(null);
+    setBatchMeta(null);
 
     try {
       const response = await axios.post(`${API_URL}/shortlist`, { smiles_list: smilesList });
       console.log("Batch Results:", response.data.results);
       setBatchResults(response.data.results);
+      const report = response.data.resolution_report || [];
+      setBatchMeta({
+        totalInputs: response.data.total_inputs ?? smilesList.length,
+        totalRanked: response.data.total_ranked ?? response.data.results?.length ?? 0,
+        resolvedCount: report.filter(item => item.resolved).length,
+      });
       setScanCount(smilesList.length);
     } catch (err) {
       console.error(err);
@@ -304,13 +312,18 @@ function App() {
                     <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wide flex items-center gap-2">
                       <Search className="w-4 h-4 text-blue-400" /> Molecular Input
                     </h3>
+                    <div className="flex gap-1">
+                      {['SMILES', 'Name', 'Formula'].map(tag => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[9px] font-bold uppercase tracking-wider border border-blue-500/20">{tag}</span>
+                      ))}
+                    </div>
                   </div>
 
                   <form onSubmit={handlePredict} className="space-y-4">
                     <textarea
                       value={smiles}
                       onChange={(e) => setSmiles(e.target.value)}
-                      placeholder="Enter SMILES string (e.g. CCO)..."
+                      placeholder={'Enter SMILES, chemical name, or formula...\n\nExamples:\n  CC(=O)Oc1ccccc1C(=O)O  (SMILES)\n  aspirin  (Name)\n  C9H8O4  (Formula)'}
                       className="input-field w-full h-32 font-mono text-sm resize-none"
                     />
                     <button
@@ -327,9 +340,10 @@ function App() {
                     <h4 className="text-xs font-semibold text-slate-500 uppercase mb-3 px-1">Quick Load Examples</h4>
                     <div className="space-y-2">
                       {[
-                        { name: "Doxorubicin", type: "Active (Anthracycline)", color: "bg-emerald-500", smiles: "CC1=C2C(=C(C=C1)O)C(=O)C3=C(C2=O)C(=CC=C3)O" },
-                        { name: "Paclitaxel", type: "Active (Taxane)", color: "bg-emerald-500", smiles: "CC1=C2C(C(=O)C3(C(CC4C(C3C(C(C2(C)C)(CC1OC(=O)C(C(C5=CC=CC=C5)NC(=O)C6=CC=CC=C6)O)O)OC(=O)C7=CC=CC=C7)(CO4)OC(=O)C)O)C)OC(=O)C" },
-                        { name: "Aspirin", type: "Inactive Control", color: "bg-slate-500", smiles: "CC(=O)Oc1ccccc1C(=O)O" },
+                        { name: "Doxorubicin", type: "Active (Anthracycline)", color: "bg-emerald-500", smiles: "doxorubicin" },
+                        { name: "Paclitaxel", type: "Active (Taxane)", color: "bg-emerald-500", smiles: "paclitaxel" },
+                        { name: "Aspirin", type: "Inactive Control", color: "bg-slate-500", smiles: "aspirin" },
+                        { name: "Caffeine (Formula)", type: "Formula: C8H10N4O2", color: "bg-amber-500", smiles: "C8H10N4O2" },
                       ].map((item, i) => (
                         <button
                           key={i}
@@ -350,7 +364,7 @@ function App() {
                 <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 flex gap-3">
                   <Info className="w-5 h-5 text-blue-400 shrink-0" />
                   <p className="text-xs text-blue-300/80 leading-relaxed">
-                    Model trained on NCI-60/ChEMBL cancer datasets. Predictions for research use only. Structure converted to graph representation for GNN analysis.
+                    <strong>Smart Input:</strong> Enter a SMILES string, a <strong>chemical name</strong> (e.g. aspirin, paclitaxel), or a <strong>molecular formula</strong> (e.g. C9H8O4). The system auto-resolves via PubChem.
                   </p>
                 </div>
               </div>
@@ -391,6 +405,25 @@ function App() {
                             <Activity className="w-3 h-3 text-emerald-500" />
                             Predicted Anticancer Potency
                           </div>
+
+                          {/* Show resolved compound info when input was name/formula */}
+                          {result.input_type !== 'smiles' && (
+                            <div className="mb-3 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                              <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1">
+                                Resolved from {result.input_type === 'name' ? 'Chemical Name' : 'Molecular Formula'}
+                              </div>
+                              <div className="text-xs text-cyan-300/80">
+                                <span className="font-medium">{result.original_input}</span>
+                                {result.compound_name && <span className="text-slate-400"> → {result.compound_name}</span>}
+                              </div>
+                              {result.molecular_formula && (
+                                <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                                  Formula: {result.molecular_formula}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <h2 className={`text-3xl font-bold mb-4 ${result.prediction_class === 1 ? 'text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400' : 'text-slate-400'}`}>
                             {result.prediction_class === 1 ? 'Active Tumor Inhibitor' : 'Low Potency Candidate'}
                           </h2>
@@ -509,8 +542,22 @@ function App() {
                       <Database className="w-4 h-4 text-slate-400" />
                       <span className="text-[10px] font-bold text-slate-500 uppercase">Library Size</span>
                     </div>
-                    <div className="text-2xl font-mono text-white">{scanCount}</div>
+                    <div className="text-2xl font-mono text-white">{batchMeta?.totalInputs ?? scanCount}</div>
                   </div>
+                </div>
+              )}
+
+              {batchMeta && (
+                <div className="card p-4 bg-cyan-500/5 border-cyan-500/10 flex flex-wrap items-center gap-4 text-xs">
+                  <span className="text-cyan-300">
+                    Resolved via smart input: <strong>{batchMeta.resolvedCount}</strong>
+                  </span>
+                  <span className="text-slate-400">
+                    Ranked molecules: <strong>{batchMeta.totalRanked}</strong>
+                  </span>
+                  <span className="text-slate-500">
+                    (Unresolved/invalid entries are skipped automatically)
+                  </span>
                 </div>
               )}
 
@@ -528,7 +575,7 @@ function App() {
                       <textarea
                         value={batchSmiles}
                         onChange={(e) => setBatchSmiles(e.target.value)}
-                        placeholder="Paste list of SMILES strings..."
+                        placeholder={'Paste SMILES, names, or formulas (one per line)...\n\nExamples:\n  CC(=O)Oc1ccccc1C(=O)O\n  aspirin\n  C9H8O4'}
                         className="input-field flex-1 font-mono text-xs resize-none min-h-[200px]"
                       />
                       <div className="grid grid-cols-2 gap-3">
@@ -624,6 +671,12 @@ function App() {
                           <Filter className="w-16 h-16 opacity-20 mb-4" />
                           <p>No screening data available</p>
                           <span className="text-xs opacity-50">Load a library to identify hits</span>
+                        </div>
+                      ) : batchResults.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                          <ShieldAlert className="w-10 h-10 opacity-30 mb-3" />
+                          <p>No valid molecules could be ranked</p>
+                          <span className="text-xs opacity-60">Try valid SMILES, known names, or formulas like C9H8O4.</span>
                         </div>
                       ) : (
                         <table className="w-full text-left border-collapse">

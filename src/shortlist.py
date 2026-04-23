@@ -70,8 +70,8 @@ class DrugShortlister:
         # Initialize graph converter
         self.graph_converter = MolecularGraphConverter(use_edge_features=True)
         
-        print(f"✅ Loaded trained GNN model from: {model_path}")
-        print(f"   Running on: {device}")
+        print(f"[OK] Loaded trained GNN model from: {model_path}")
+        print(f"     Running on: {device}")
     
     def predict_single(self, smiles: str) -> Optional[Tuple[float, int]]:
         """
@@ -105,7 +105,7 @@ class DrugShortlister:
     def predict_batch(
         self, 
         smiles_list: List[str]
-    ) -> Tuple[List[float], List[int], List[str]]:
+    ) -> Tuple[List[float], List[int], List[str], List[int]]:
         """
         Predict for multiple molecules.
         
@@ -117,6 +117,7 @@ class DrugShortlister:
             - List of probabilities (active class)
             - List of predicted classes (0 or 1)
             - List of invalid SMILES
+            - List of valid indices aligned with probabilities/predictions
         """
         probabilities = []
         predictions = []
@@ -135,7 +136,7 @@ class DrugShortlister:
                 invalid_smiles.append(smiles)
         
         if len(graphs) == 0:
-            return [], [], invalid_smiles
+            return [], [], invalid_smiles, valid_indices
         
         # Batch prediction
         batch = Batch.from_data_list(graphs).to(self.device)
@@ -149,7 +150,7 @@ class DrugShortlister:
         probabilities = prob_active.tolist()
         predictions = pred_classes.tolist()
         
-        return probabilities, predictions, invalid_smiles
+        return probabilities, predictions, invalid_smiles, valid_indices
     
     def shortlist_drugs(
         self,
@@ -171,7 +172,7 @@ class DrugShortlister:
             DataFrame with ranked drug candidates
         """
         print(f"\n{'='*70}")
-        print(f"DRUG CANDIDATE SHORTLISTING")
+        print("DRUG CANDIDATE SHORTLISTING")
         print(f"{'='*70}")
         print(f"Evaluating {len(smiles_list)} drug molecules...")
         
@@ -180,22 +181,28 @@ class DrugShortlister:
             drug_names = [f"Drug_{i+1}" for i in range(len(smiles_list))]
         
         # Predict for all molecules
-        probabilities, predictions, invalid = self.predict_batch(smiles_list)
+        probabilities, predictions, invalid, valid_indices = self.predict_batch(smiles_list)
         
-        # Create results dataframe
+        # Create results dataframe while preserving duplicates and original order.
+        # Map by index to avoid incorrect lookups when the same SMILES appears multiple times.
         results = []
-        for i, (smiles, name) in enumerate(zip(smiles_list, drug_names)):
-            if smiles not in invalid:
-                idx = smiles_list.index(smiles) - len([s for s in invalid if smiles_list.index(s) < smiles_list.index(smiles)])
-                if idx < len(probabilities):
-                    results.append({
-                        'Rank': 0,  # Will be filled later
-                        'Drug_Name': name,
-                        'SMILES': smiles,
-                        'Predicted_Probability': probabilities[idx],
-                        'Predicted_Class': 'Active' if predictions[idx] == 1 else 'Inactive',
-                        'Confidence': 'High' if abs(probabilities[idx] - 0.5) > 0.3 else 'Medium' if abs(probabilities[idx] - 0.5) > 0.15 else 'Low'
-                    })
+        for prediction_idx, source_idx in enumerate(valid_indices):
+            if prediction_idx >= len(probabilities) or source_idx >= len(smiles_list):
+                continue
+
+            smiles = smiles_list[source_idx]
+            name = drug_names[source_idx]
+            prob = probabilities[prediction_idx]
+            pred = predictions[prediction_idx]
+
+            results.append({
+                'Rank': 0,  # Will be filled later
+                'Drug_Name': name,
+                'SMILES': smiles,
+                'Predicted_Probability': prob,
+                'Predicted_Class': 'Active' if pred == 1 else 'Inactive',
+                'Confidence': 'High' if abs(prob - 0.5) > 0.3 else 'Medium' if abs(prob - 0.5) > 0.15 else 'Low'
+            })
         
         # Create dataframe and sort by probability
         df = pd.DataFrame(results)
@@ -205,10 +212,10 @@ class DrugShortlister:
         # Filter by threshold and top_k
         df_shortlisted = df[df['Predicted_Probability'] >= threshold].head(top_k)
         
-        print(f"\n✅ Successfully evaluated: {len(df)} molecules")
-        print(f"❌ Invalid SMILES: {len(invalid)}")
-        print(f"📊 Active predictions (prob >= {threshold}): {len(df[df['Predicted_Probability'] >= threshold])}")
-        print(f"🎯 Top-{top_k} shortlisted candidates: {len(df_shortlisted)}")
+        print(f"\n[OK] Successfully evaluated: {len(df)} molecules")
+        print(f"[!!] Invalid SMILES: {len(invalid)}")
+        print(f"[##] Active predictions (prob >= {threshold}): {len(df[df['Predicted_Probability'] >= threshold])}")
+        print(f"[>>] Top-{top_k} shortlisted candidates: {len(df_shortlisted)}")
         
         print(f"\n{'='*70}")
         print(f"TOP {min(top_k, len(df_shortlisted))} SHORTLISTED DRUG CANDIDATES")
@@ -216,7 +223,7 @@ class DrugShortlister:
         
         # Display top candidates
         for _, row in df_shortlisted.iterrows():
-            print(f"\n🏆 Rank {row['Rank']}: {row['Drug_Name']}")
+            print(f"\n[*] Rank {row['Rank']}: {row['Drug_Name']}")
             print(f"   Probability: {row['Predicted_Probability']:.4f} ({row['Predicted_Probability']*100:.2f}%)")
             print(f"   Prediction:  {row['Predicted_Class']}")
             print(f"   Confidence:  {row['Confidence']}")
@@ -247,7 +254,7 @@ class DrugShortlister:
         elif format == 'json':
             df.to_json(output_path, orient='records', indent=2)
         
-        print(f"💾 Shortlisted drugs saved to: {output_path}")
+        print(f"[SAVED] Shortlisted drugs saved to: {output_path}")
 
 
 # Example usage and testing
@@ -276,14 +283,14 @@ if __name__ == "__main__":
     smiles_list = list(test_molecules.values())
     drug_names = list(test_molecules.keys())
     
-    print("\n📋 Test molecules:")
+    print("\nTest molecules:")
     for name in drug_names:
-        print(f"   • {name}")
+        print(f"   - {name}")
     
     # Check if model exists
     model_path = "results/models/gnn_model.pth"
     
-    print(f"\n🔍 Looking for trained model at: {model_path}")
+    print(f"\nLooking for trained model at: {model_path}")
     
     import os
     if os.path.exists(model_path):
@@ -306,5 +313,5 @@ if __name__ == "__main__":
             os.path.join(output_dir, 'top_candidates.csv')
         )
     else:
-        print("❌ Model not found. Please train the GNN model first:")
+        print("[ERROR] Model not found. Please train the GNN model first:")
         print("   python notebooks/04_gnn_training.py")
